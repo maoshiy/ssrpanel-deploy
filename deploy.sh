@@ -751,9 +751,8 @@ auto_reboot_shadowsocksr(){
             [ -z "${auto_minute}" ] && auto_minute="30"
             expr ${auto_minute} + 1 &>/dev/null
 
-            echo
-            echo -e "${green}Time has been set, now install crontab! ${plain}"
-            echo
+            echo -e "[${green}Info${plain}] You have successfully set the time, then install crontab!"
+
             # Install crontabs
             if check_sys packageManager yum; then
                 yum install -y vixie-cron cronie
@@ -778,7 +777,7 @@ auto_reboot_shadowsocksr(){
                 echo -e "[${yellow}Warning${plain}] crontab start failure!"
             fi
 
-            echo
+            echo -e "[${green}Info${plain}] Has been installed successfully!"
             echo -e "-----------------------------------------------------"
             echo -e "The time for automatic restart has been set! "
             echo -e "-----------------------------------------------------"
@@ -786,7 +785,6 @@ auto_reboot_shadowsocksr(){
             echo -e "minute     : ${auto_minute}                 "
             echo -e "Restart the system at ${auto_hour}:${auto_minute} every day"
             echo -e "-----------------------------------------------------"
-            echo
 
         else
             echo
