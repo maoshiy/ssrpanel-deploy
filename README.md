@@ -1,3 +1,8 @@
+### 功能
+1. 安装shadowsocksr服务端
+2. 卸载shadowsocksr服务端
+3. 设置定时重启
+
 ### 安装wget
 ```
 # centos
