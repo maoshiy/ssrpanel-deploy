@@ -751,7 +751,7 @@ auto_reboot_shadowsocksr(){
             [ -z "${auto_minute}" ] && auto_minute="30"
             expr ${auto_minute} + 1 &>/dev/null
 
-            echo -e "[${green}Info${plain}] You have successfully set the time, then install crontab!"
+            echo -e "[${green}Info${plain}] The time has been set, then install crontab!"
 
             # Install crontabs
             if check_sys packageManager yum; then
