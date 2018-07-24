@@ -196,6 +196,22 @@ get_ip(){
     [ ! -z ${IP} ] && echo ${IP} || echo
 }
 
+# Modify time zone
+modify_time(){
+    # set time zone
+    if check_sys packageManager yum; then
+       ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+    elif check_sys packageManager apt; then
+       ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+    fi
+    # status info
+    if [ $? -eq 0 ]; then
+        echo -e "[${green}Info${plain}] Modify the time zone success!"
+    else
+        echo -e "[${yellow}Warning${plain}] Modify the time zone failure!"
+    fi
+}
+
 get_char(){
     SAVEDSTTY=`stty -g`
     stty -echo
@@ -682,6 +698,7 @@ install_shadowsocksr(){
             echo
         fi
     else
+        modify_time
         disable_selinux
         install_prepare
         deploy_config
@@ -738,6 +755,8 @@ auto_reboot_shadowsocksr(){
     cd ${cur_dir}
     if [ -f /usr/local/${shadowsocksr_dir}/server.py ]; then
         if [ $? -eq 0 ]; then
+            # Modify time zone
+            modify_time
 
             #hour
             echo -e "Please enter the hour now(0-23):"
