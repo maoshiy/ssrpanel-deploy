@@ -777,7 +777,7 @@ auto_reboot_shadowsocksr(){
                 yum install -y vixie-cron cronie
             elif check_sys packageManager apt; then
                 apt-get -y update
-                apt-get -y cron
+                apt-get -y install cron
             fi
 
             echo "$auto_minute $auto_hour * * * root /sbin/reboot" >> /etc/crontab
