@@ -1,7 +1,7 @@
 ### 功能
 1. 安装shadowsocksr服务端
 2. 卸载shadowsocksr服务端
-3. 设置定时重启
+3. 设置定时重启服务器
 
 ### 安装wget
 ```
@@ -14,18 +14,18 @@ apt-get -y install wget
 
 ### 执行脚本
 ```
-rm -rf ./deploy.sh ./shadowsocksr.log
+rm -rf ./deploy.sh
 wget -N --no-check-certificate https://raw.githubusercontent.com/quniu/ssrpanel-deploy/master/deploy.sh
 chmod +x deploy.sh
-./deploy.sh 2>&1 | tee shadowsocksr.log
+./deploy.sh
 ```
 
 ### 说明
-日志在`/root/`下面
+日志目录`/root/`
 
-脚本在`/root/`下面
+脚本目录`/root/`下面
 
-安装路径在`/usr/local/shadowsocksr`下面
+SSR安装目录`/usr/local/shadowsocksr`
 
 ### 查看shadowsocksr服务
 

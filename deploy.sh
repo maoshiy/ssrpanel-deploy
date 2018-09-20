@@ -4,12 +4,9 @@
 # System Required:  CentOS 6,7, Debian, Ubuntu
 # Description: One click ShadowsocksR Server
 #
-# Thanks: @breakwa11 <https://twitter.com/breakwa11>
 # Thanks: @teddysun <https://github.com/teddysun>
 # Reference URL:
-# https://github.com/shadowsocksr-rm/shadowsocksr
-# https://github.com/shadowsocksrr/shadowsocksr
-# https://github.com/shadowsocksrr/shadowsocksr-csharp
+# https://github.com/ssrpanel/shadowsocksr
 # Author: QuNiu
 #
 
@@ -23,7 +20,6 @@ libsodium_file="libsodium-1.0.16"
 libsodium_url="https://github.com/jedisct1/libsodium/releases/download/1.0.16/libsodium-1.0.16.tar.gz"
 
 # shadowsocksr
-shadowsocksr_dir="shadowsocksr"
 shadowsocksr_name="shadowsocksr"
 shadowsocksr_file="shadowsocksr"
 shadowsocksr_url="https://github.com/quniu/${shadowsocksr_file}.git"
@@ -418,7 +414,7 @@ firewall_set(){
 
 # Set userapiconfig.py
 config_userapi(){
-    cat > /usr/local/${shadowsocksr_dir}/userapiconfig.py<<-EOF
+    cat > /usr/local/${shadowsocksr_name}/userapiconfig.py<<-EOF
 API_INTERFACE = '${shadowsocksrinterface}'
 UPDATE_TIME = 60
 SERVER_PUB_ADDR = '127.0.0.1'
@@ -430,7 +426,7 @@ EOF
 
 # Config user-config.json
 config_userjson(){
-    cat > /usr/local/${shadowsocksr_dir}/user-config.json<<-EOF
+    cat > /usr/local/${shadowsocksr_name}/user-config.json<<-EOF
 {
     "server":"0.0.0.0",
     "server_ipv6": "::",
@@ -459,7 +455,7 @@ EOF
 
 # Config usermysql.json
 config_usermysql(){
-    cat > /usr/local/${shadowsocksr_dir}/usermysql.json<<-EOF
+    cat > /usr/local/${shadowsocksr_name}/usermysql.json<<-EOF
 {
     "host": "${mysql_ip_address}",
     "port": ${mysql_ip_port},
@@ -479,9 +475,9 @@ EOF
 # Install cymysql
 install_cymysql(){
     cd ${cur_dir}
-    if [ ! -d "/usr/local/${shadowsocksr_dir}/cymysql" ]; then
+    if [ ! -d "/usr/local/${shadowsocksr_name}/cymysql" ]; then
         git clone ${cymysql_url}
-        mv ${cymysql_file}/cymysql /usr/local/${shadowsocksr_dir}
+        mv ${cymysql_file}/cymysql /usr/local/${shadowsocksr_name}
         echo
         echo -e "cymysql install completed!"
         echo
@@ -536,7 +532,7 @@ deploy_config(){
     [ -z "${mysql_ip_port}" ] && mysql_ip_port="3306"
     expr ${mysql_ip_port} + 1 &>/dev/null
     #db_name
-    echo -e "Please enter the mysql db_name:"
+    echo -e "Please enter the mysql database name:"
     read -p "(Default name: ssrpanel):" mysql_db_name
     [ -z "${mysql_db_name}" ] && mysql_db_name="ssrpanel"
     expr ${mysql_db_name} + 1 &>/dev/null
@@ -546,12 +542,12 @@ deploy_config(){
     [ -z "${mysql_user_name}" ] && mysql_user_name="ssrpanel"
     expr ${mysql_user_name} + 1 &>/dev/null
     #db_password
-    echo -e "Please enter the mysql db_password:"
+    echo -e "Please enter the mysql database password:"
     read -p "(Default password: password):" mysql_db_password
     [ -z "${mysql_db_password}" ] && mysql_db_password="password"
     expr ${mysql_db_password} + 1 &>/dev/null
     #nodeid
-    echo -e "Please enter This node ID:"
+    echo -e "Please enter the node ID:"
     read -p "(Default ID: 1):" mysql_nodeid
     [ -z "${mysql_nodeid}" ] && mysql_nodeid="1"
     expr ${mysql_nodeid} + 1 &>/dev/null
@@ -590,7 +586,7 @@ deploy_config(){
 # Deploy ShadowsocksR
 deploy_shadowsocksr(){
     cd ${cur_dir}
-    mv ${shadowsocksr_file} /usr/local/${shadowsocksr_dir}
+    mv ${shadowsocksr_file} /usr/local/${shadowsocksr_name}
     config_userapi
     config_userjson
     config_usermysql
@@ -616,7 +612,7 @@ install_libsodium(){
 
 # Starts shadowsocksr service
 start_service(){
-    if [ -f /usr/local/${shadowsocksr_dir}/server.py ]; then
+    if [ -f /usr/local/${shadowsocksr_name}/server.py ]; then
         if [ $? -eq 0 ]; then
             chmod +x /etc/init.d/${shadowsocksr_name}
             if check_sys packageManager yum; then
@@ -683,7 +679,7 @@ install_cleanup(){
 
 # Install ShadowsocksR
 install_shadowsocksr(){
-    if [ -d "/usr/local/${shadowsocksr_dir}" ]; then
+    if [ -d "/usr/local/${shadowsocksr_name}" ]; then
         printf "ShadowsocksR has been installed, Do you want to uninstall it? (y/n)"
         printf "\n"
         read -p "(Default: y):" install_answer
@@ -722,7 +718,7 @@ uninstall_shadowsocksr(){
     read -p "(Default: n):" answer
     [ -z ${answer} ] && answer="n"
     if [ "${answer}" == "y" ] || [ "${answer}" == "Y" ]; then
-        if [ -d "/usr/local/${shadowsocksr_dir}" ]; then
+        if [ -d "/usr/local/${shadowsocksr_name}" ]; then
             /etc/init.d/${shadowsocksr_name} status > /dev/null 2>&1
             if [ $? -eq 0 ]; then
                 /etc/init.d/${shadowsocksr_name} stop
@@ -736,7 +732,7 @@ uninstall_shadowsocksr(){
 
             rm -f /etc/init.d/${shadowsocksr_name}
             rm -f ./${shadowsocksr_name}.log
-            rm -rf /usr/local/${shadowsocksr_dir}
+            rm -rf /usr/local/${shadowsocksr_name}
             echo "ShadowsocksR uninstall success!"
         else
             echo
@@ -753,7 +749,7 @@ uninstall_shadowsocksr(){
 # Auto Reboot ShadowsocksR
 auto_reboot_shadowsocksr(){
     cd ${cur_dir}
-    if [ -f /usr/local/${shadowsocksr_dir}/server.py ]; then
+    if [ -f /usr/local/${shadowsocksr_name}/server.py ]; then
         if [ $? -eq 0 ]; then
             # Modify time zone
             modify_time
@@ -823,6 +819,7 @@ commands=(
 Install\ ShadowsocksR
 Uninstall\ ShadowsocksR
 Auto\ Reboot\ ShadowsocksR
+Modify\ time\ zone
 )
 
 
@@ -863,6 +860,9 @@ choose_command(){
         ;;
         3)
         auto_reboot_shadowsocksr
+        ;;
+        4)
+        modify_time
         ;;
         *)
         exit 1
