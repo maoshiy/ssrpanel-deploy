@@ -1,0 +1,106 @@
+#!/bin/bash
+
+#
+# chkconfig: 2345 90 10
+# description: A secure Vmess proxy, designed to protect your Internet traffic.
+# Provides:          v2ray
+# Required-Start:    $network $syslog
+# Required-Stop:     $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Fast tunnel proxy that helps you bypass firewalls
+# Description:       Start or stop the v2ray server
+#
+# Author: QuNiu
+#
+
+
+# main
+PANEL_NAME=ssrpanel-v2ray
+V2RAY_NAME=v2ray
+PANEL_CONF=ssrpanel-v2ray.jar
+V2RAY_CONF=/usr/local/v2ray-linux-64/v2ray
+PANEL_DIR=/usr/local/ssrpanel-v2ray/
+JAVA_BIN=/usr/bin/java
+
+RETVAL=0
+
+
+check_running(){
+    PANEL_PID=$(ps -aux | grep -v grep | grep -i "${PANEL_CONF}" | awk '{print $2}')
+    V2RAY_PID=$(ps -aux | grep -v grep | grep -i "${V2RAY_CONF}" | awk '{print $2}')
+    if [ -n "$PANEL_PID" ]; then
+        if [ -n "$V2RAY_PID" ]; then
+            return 0
+        else
+            kill -9 $PANEL_PID
+            return 1
+        fi
+    else
+        if [ -n "$V2RAY_PID" ]; then
+            kill -9 $PANEL_PID
+        fi
+        return 1
+    fi
+}
+
+do_start(){
+    check_running
+    if [ $? -eq 0 ]; then
+        echo "$PANEL_NAME (pid $PANEL_PID) | $V2RAY_NAME (pid $V2RAY_PID) is already running..."
+        exit 0
+    else
+        cd $PANEL_DIR
+        nohup $JAVA_BIN -jar $PANEL_CONF >> /dev/null 2>&1 &
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ]; then
+            echo "Starting $PANEL_NAME $V2RAY_NAME success!"
+        else
+            echo "Starting $PANEL_NAME $V2RAY_NAME failed!"
+        fi
+    fi
+}
+
+do_stop(){
+    check_running
+    if [ $? -eq 0 ]; then
+        kill -9 $PANEL_PID $V2RAY_PID
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ]; then
+            echo "Stopping $PANEL_NAME $V2RAY_NAME success!"
+        else
+            echo "Stopping $PANEL_NAME $V2RAY_NAME failed!"
+        fi
+    else
+        echo "$PANEL_NAME $V2RAY_NAME is stopped"
+        RETVAL=1
+    fi
+}
+
+do_status(){
+    check_running
+    if [ $? -eq 0 ]; then
+        echo "$PANEL_NAME (pid $PANEL_PID) | $V2RAY_NAME (pid $V2RAY_PID) is running..."
+    else
+        echo "$PANEL_NAME $V2RAY_NAME is stopped"
+        RETVAL=1
+    fi
+}
+
+do_restart(){
+    do_stop
+    sleep 0.5
+    do_start
+}
+
+case "$1" in
+    start|stop|restart|status)
+    do_$1
+    ;;
+    *)
+    echo "Usage: $0 { start | stop | restart | status }"
+    RETVAL=1
+    ;;
+esac
+
+exit $RETVAL

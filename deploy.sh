@@ -26,6 +26,14 @@ shadowsocksr_url="https://github.com/quniu/${shadowsocksr_file}.git"
 shadowsocksr_service_yum="https://raw.githubusercontent.com/quniu/ssrpanel-deploy/master/service/${shadowsocksr_name}"
 shadowsocksr_service_apt="https://raw.githubusercontent.com/quniu/ssrpanel-deploy/master/service/${shadowsocksr_name}-debian"
 
+# v2ray
+ssrpanel_v2ray_name="ssrpanel-v2ray"
+v2ray_core_name="v2ray-linux-64"
+v2ray_init_name="v2ray"
+v2ray_service_yum="https://raw.githubusercontent.com/quniu/ssrpanel-deploy/master/service/${v2ray_init_name}"
+v2ray_service_apt="https://raw.githubusercontent.com/quniu/ssrpanel-deploy/master/service/${v2ray_init_name}-debian"
+
+
 # CyMySQL
 cymysql_file="CyMySQL"
 cymysql_url="https://github.com/nakagami/CyMySQL.git"
@@ -94,6 +102,14 @@ sspanelv3
 sspanelv3ssr
 glzjinmod
 legendsockssr
+)
+
+# v2ray ciphers
+v2ray_ciphers=(
+auto
+none
+aes-128-gcm
+chacha20-poly1305
 )
 
 # Color
@@ -575,10 +591,10 @@ deploy_config(){
     char=`get_char`
     # Install necessary dependencies
     if check_sys packageManager yum; then
-        yum install -y python python-devel python-setuptools openssl openssl-devel curl wget unzip gcc automake autoconf make libtool wget git
+        yum install -y python python-devel python-setuptools openssl openssl-devel curl unzip gcc automake autoconf make libtool wget git
     elif check_sys packageManager apt; then
         apt-get -y update
-        apt-get -y install python python-dev python-setuptools openssl libssl-dev curl wget unzip gcc automake autoconf make libtool wget git
+        apt-get -y install python python-dev python-setuptools openssl libssl-dev curl unzip gcc automake autoconf make libtool wget git
     fi
     cd ${cur_dir}
 }
@@ -685,9 +701,8 @@ install_shadowsocksr(){
         read -p "(Default: y):" install_answer
         [ -z ${install_answer} ] && install_answer="y"
         if [ "${install_answer}" == "y" ] || [ "${install_answer}" == "Y" ]; then
-            uninstall
             cd ${cur_dir}
-            choose_command
+            uninstall_shadowsocksr
         else
             echo
             echo "uninstall cancelled, nothing to do..."
@@ -746,8 +761,8 @@ uninstall_shadowsocksr(){
     fi
 }
 
-# Auto Reboot ShadowsocksR
-auto_reboot_shadowsocksr(){
+# Auto Reboot System
+auto_reboot_system(){
     cd ${cur_dir}
     if [ -f /usr/local/${shadowsocksr_name}/server.py ]; then
         if [ $? -eq 0 ]; then
@@ -814,11 +829,523 @@ auto_reboot_shadowsocksr(){
     fi
 }
 
+
+########################################################  V2RAY START ########################################################
+# ssrpanel-v2ray version
+get_ssrpanel_v2ray_ver(){
+    ssrpanel_v2ray_ver=$(wget --no-check-certificate -qO- https://api.github.com/repos/aiyahacke/ssrpanel-v2ray/releases/latest | grep 'tag_name' | cut -d\" -f4)
+    [ -z ${ssrpanel_v2ray_ver} ] && echo -e "[${red}Error${plain}] Get ssrpanel-v2ray latest version failed" && exit 1
+}
+
+# v2ray-core version
+get_v2ray_core_ver(){
+    v2ray_core_ver=$(wget --no-check-certificate -qO- https://api.github.com/repos/v2ray/v2ray-core/releases/latest | grep 'tag_name' | cut -d\" -f4)
+    [ -z ${v2ray_core_ver} ] && echo -e "[${red}Error${plain}] Get v2ray-core latest version failed" && exit 1
+}
+
+# download file
+download(){
+    local filename=$(basename $1)
+    if [ -f ${1} ]; then
+        echo "${filename} [found]"
+    else
+        echo "${filename} not found, download now..."
+        wget --no-check-certificate -c -t3 -T60 -O ${1} ${2}
+        if [ $? -ne 0 ]; then
+            echo -e "[${red}Error${plain}] Download ${filename} failed."
+            exit 1
+        fi
+    fi
+}
+
+# v2ray Pre-installation settings
+v2ray_install_prepare(){
+    if check_sys packageManager yum || check_sys packageManager apt; then
+        # Not support CentOS 5
+        if centosversion 5; then
+            echo -e "$[{red}Error${plain}] Not supported CentOS 5, please change to CentOS 6+/Debian 7+/Ubuntu 12+ and try again!"
+            exit 1
+        fi
+    else
+        echo -e "[${red}Error${plain}] Your OS is not supported. please change OS to CentOS/Debian/Ubuntu and try again!"
+        exit 1
+    fi
+
+    # Set v2ray.grpc port
+    while true
+    do
+    echo -e "Please enter a port for v2ray.grpc [1-65535]:"
+    read -p "(Default port: 52088):" v2ray_grpc_port
+    [ -z "${v2ray_grpc_port}" ] && v2ray_grpc_port="52088"
+    expr ${v2ray_grpc_port} + 1 &>/dev/null
+    if [ $? -eq 0 ]; then
+        if [ ${v2ray_grpc_port} -ge 1 ] && [ ${v2ray_grpc_port} -le 65535 ] && [ ${v2ray_grpc_port:0:1} != 0 ]; then
+            echo
+            echo "---------------------------"
+            echo "v2ray grpc port = ${v2ray_grpc_port}"
+            echo "---------------------------"
+            echo
+            break
+        fi
+    fi
+    echo -e "[${red}Error${plain}] Please enter a correct number [1-65535]"
+    done
+
+    # Set v2ray vmess port
+    while true
+    do
+    echo -e "Please enter a port for v2ray vmess(v2ray port of panel) [1-65535]:"
+    read -p "(Default port: 52099):" v2ray_vmess_port
+    [ -z "${v2ray_vmess_port}" ] && v2ray_vmess_port="52099"
+    expr ${v2ray_vmess_port} + 1 &>/dev/null
+    if [ $? -eq 0 ]; then
+        if [ ${v2ray_vmess_port} -ge 1 ] && [ ${v2ray_vmess_port} -le 65535 ] && [ ${v2ray_vmess_port:0:1} != 0 ]; then
+            echo
+            echo "---------------------------"
+            echo "v2ray vmess port = ${v2ray_vmess_port}"
+            echo "---------------------------"
+            echo
+            break
+        fi
+    fi
+    echo -e "[${red}Error${plain}] Please enter a correct number [1-65535]"
+    done
+
+    # Set v2ray ciphers
+    while true
+    do
+    echo -e "Please select ciphers for v2ray:"
+    for ((i=1;i<=${#v2ray_ciphers[@]};i++ )); do
+        hint="${v2ray_ciphers[$i-1]}"
+        echo -e "${green}${i}${plain}) ${hint}"
+    done
+    read -p "Which interface you'd select(Default: ${v2ray_ciphers[0]}):" encty
+    [ -z "$encty" ] && encty=1
+    expr ${encty} + 1 &>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "[${red}Error${plain}] Input error, please input a number"
+        continue
+    fi
+    if [[ "$encty" -lt 1 || "$encty" -gt ${#v2ray_ciphers[@]} ]]; then
+        echo -e "[${red}Error${plain}] Input error, please input a number between 1 and ${#v2ray_ciphers[@]}"
+        continue
+    fi
+    v2ray_encryption=${v2ray_ciphers[$encty-1]}
+    echo
+    echo "---------------------------"
+    echo "v2ray encryption = ${v2ray_encryption}"
+    echo "---------------------------"
+    echo
+    break
+    done
+
+    # Set DB config
+    while true
+    do
+    #ip
+    echo -e "Please enter the mysql ip address:"
+    read -p "(Default address: 127.0.0.1):" v2ray_mysql_ip_address
+    [ -z "${v2ray_mysql_ip_address}" ] && v2ray_mysql_ip_address="127.0.0.1"
+    expr ${v2ray_mysql_ip_address} + 1 &>/dev/null
+    #port
+    echo -e "Please enter the mysql port:"
+    read -p "(Default port: 3306):" v2ray_mysql_ip_port
+    [ -z "${v2ray_mysql_ip_port}" ] && v2ray_mysql_ip_port="3306"
+    expr ${v2ray_mysql_ip_port} + 1 &>/dev/null
+    #db_name
+    echo -e "Please enter the mysql database name:"
+    read -p "(Default name: ssrpanel):" v2ray_mysql_db_name
+    [ -z "${v2ray_mysql_db_name}" ] && v2ray_mysql_db_name="ssrpanel"
+    expr ${v2ray_mysql_db_name} + 1 &>/dev/null
+    #user_name
+    echo -e "Please enter the mysql user_name:"
+    read -p "(Default user: ssrpanel):" v2ray_mysql_user_name
+    [ -z "${v2ray_mysql_user_name}" ] && v2ray_mysql_user_name="ssrpanel"
+    expr ${v2ray_mysql_user_name} + 1 &>/dev/null
+    #db_password
+    echo -e "Please enter the mysql database password:"
+    read -p "(Default password: password):" v2ray_mysql_db_password
+    [ -z "${v2ray_mysql_db_password}" ] && v2ray_mysql_db_password="password"
+    expr ${v2ray_mysql_db_password} + 1 &>/dev/null
+    #alter-id
+    echo -e "Please enter the alter-id ID:"
+    read -p "(Default ID: 16):" v2ray_mysql_alter_id
+    [ -z "${v2ray_mysql_alter_id}" ] && v2ray_mysql_alter_id="16"
+    expr ${v2ray_mysql_alter_id} + 1 &>/dev/null
+    #nodeid
+    echo -e "Please enter the node ID:"
+    read -p "(Default ID: 1):" v2ray_mysql_nodeid
+    [ -z "${v2ray_mysql_nodeid}" ] && v2ray_mysql_nodeid="1"
+    expr ${v2ray_mysql_nodeid} + 1 &>/dev/null
+    #ratio
+    echo -e "Please enter the ratio of this node:"
+    read -p "(Default ratio: 1.0):" v2ray_mysql_ratio
+    [ -z "${v2ray_mysql_ratio}" ] && v2ray_mysql_ratio="1.0"
+    expr ${v2ray_mysql_ratio} + 1 &>/dev/null
+    echo
+    echo -e "-----------------------------------------------------"
+    echo -e "The usermysql.json Configuration has been completed! "
+    echo -e "-----------------------------------------------------"
+    echo -e "Your MySQL IP       : ${v2ray_mysql_ip_address}            "
+    echo -e "Your MySQL Port     : ${v2ray_mysql_ip_port}               "
+    echo -e "Your MySQL DBname   : ${v2ray_mysql_db_name}               "
+    echo -e "Your MySQL User     : ${v2ray_mysql_user_name}             "
+    echo -e "Your MySQL Password : ${v2ray_mysql_db_password}           "
+    echo -e "Your Alter ID       : ${v2ray_mysql_alter_id}              "
+    echo -e "Your Node  ID       : ${v2ray_mysql_nodeid}                "
+    echo -e "Your Transfer_mul   : ${v2ray_mysql_ratio}                 "
+    echo -e "-----------------------------------------------------"
+    break
+    done
+
+    echo "Press any key to start install v2ray or Press Ctrl+C to cancel. Please continue!"
+    char=`get_char`
+    # Install necessary dependencies
+    if check_sys packageManager yum; then
+        yum install -y python python-devel python-setuptools openssl openssl-devel wget unzip java-1.8.0-openjdk java-1.8.0-openjdk-devel
+    elif check_sys packageManager apt; then
+        apt-get -y update
+        apt-get -y install python python-dev python-setuptools openssl libssl-dev wget unzip openjdk-8-jdk
+    fi
+    cd ${cur_dir} 
+}
+
+# download v2ray files
+v2ray_download_files(){
+    cd ${cur_dir}
+    if [ ! -d "/usr/local/${ssrpanel_v2ray_name}" ]; then
+        get_ssrpanel_v2ray_ver
+        ssrpanel_v2ray_file="ssrpanel-v2ray-$(echo ${ssrpanel_v2ray_ver} | sed -e 's/^[a-zA-Z]//g')"
+        ssrpanel_v2ray_url="https://github.com/aiyahacke/ssrpanel-v2ray/releases/download/${ssrpanel_v2ray_ver}/${ssrpanel_v2ray_file}.zip"
+        download "${ssrpanel_v2ray_file}.zip" "${ssrpanel_v2ray_url}"
+    else
+        echo -e "[${green}Info${plain}] ssrpanel-v2ray already installed."
+        exit 1
+    fi  
+
+    if [ ! -d "/usr/local/${v2ray_core_name}" ]; then
+        get_v2ray_core_ver
+        v2ray_core_file="v2ray-linux-64"
+        v2ray_core_url="https://github.com/v2ray/v2ray-core/releases/download/${v2ray_core_ver}/${v2ray_core_file}.zip"
+        download "${v2ray_core_file}.zip" "${v2ray_core_url}"
+    else
+        echo -e "[${green}Info${plain}] v2ray-core already installed."
+        exit 1
+    fi 
+
+    if check_sys packageManager yum; then
+        download "/etc/init.d/${v2ray_init_name}" "${v2ray_service_yum}"
+    elif check_sys packageManager apt; then
+        download "/etc/init.d/${v2ray_init_name}" "${v2ray_service_apt}"
+    fi
+}
+
+# ssrpanel_v2ray config
+config_ssrpanel_v2ray(){
+    cat > /usr/local/${ssrpanel_v2ray_name}/config.properties<<-EOF
+############################## V2ray配置 ##############################
+
+# v2ray路径
+v2ray.path=/usr/local/${v2ray_core_name}
+
+# 可执行文件名
+v2ray.exec=v2ray
+
+# GRPC设置
+v2ray.grpc.address=127.0.0.1
+v2ray.grpc.port=${v2ray_grpc_port}
+
+# 协议标签
+v2ray.tag=proxy
+
+# 加密方式 可选值(aes-128-gcm, chacha20-poly1305, none, auto)
+v2ray.security=${v2ray_encryption}
+
+# 额外ID
+v2ray.alter-id=${v2ray_mysql_alter_id}
+
+# 用户等级
+v2ray.level=1
+
+
+
+############################## 节点配置 ##############################
+
+# 节点ID
+node.id=${v2ray_mysql_nodeid}
+
+# 检查时间(秒)
+node.check-rate=60
+
+# 流量比例
+node.traffic-rate=${v2ray_mysql_ratio}
+
+
+
+############################## 数据库配置 ##############################
+
+datasource.url=jdbc:mysql://${v2ray_mysql_ip_address}:${v2ray_mysql_ip_port}/${v2ray_mysql_db_name}?serverTimezone=GMT%2B8
+datasource.username=${v2ray_mysql_user_name}
+datasource.password=${v2ray_mysql_db_password}
+datasource.hikari.maximum-pool-size=10
+datasource.hikari.minimum-idle=3
+
+EOF
+}
+
+# Config v2ray config.json
+config_v2ray(){
+    cat > /usr/local/${v2ray_core_name}/config.json<<-EOF
+{
+  "api": {
+    "services": [
+      "HandlerService",
+      "StatsService"
+    ],
+    "tag": "api"
+  },
+  "stats": {},
+  "inbound": {
+    "port": ${v2ray_vmess_port},
+    "protocol": "vmess",
+    "settings": {
+      "clients": []
+    },
+    "streamSettings": {
+      "network": "tcp"
+    },
+    "tag": "proxy"
+  },
+  "inboundDetour": [
+    {
+      "listen": "0.0.0.0",
+      "port": ${v2ray_grpc_port},
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "0.0.0.0"
+      },
+      "tag": "api"
+    }
+  ],
+  "log": {
+    "access": "./access.log",
+    "error": "./error.log",
+    "loglevel": "debug"
+  },
+  "outbound": {
+    "protocol": "freedom",
+    "settings": {}
+  },
+  "routing": {
+    "settings": {
+      "rules": [
+        {
+          "inboundTag": [
+            "api"
+          ],
+          "outboundTag": "api",
+          "type": "field"
+        }
+      ]
+    },
+    "strategy": "rules"
+  },
+  "policy": {
+    "levels": {
+      "1": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    }
+  }
+}
+EOF
+}
+
+# Deploy v2ray
+v2ray_deploy(){
+    unzip ${ssrpanel_v2ray_file}.zip -d /usr/local/${ssrpanel_v2ray_name}
+    unzip ${v2ray_core_file}.zip -d /usr/local/${v2ray_core_name}
+    mv /usr/local/${ssrpanel_v2ray_name}/${ssrpanel_v2ray_file}.jar /usr/local/${ssrpanel_v2ray_name}/${ssrpanel_v2ray_name}.jar
+    config_ssrpanel_v2ray
+    config_v2ray
+    rm -rf /usr/local/${ssrpanel_v2ray_name}/config.json
+    cp -rf /usr/local/${v2ray_core_name}/config.json /usr/local/${ssrpanel_v2ray_name}
+    chmod -R a+x /usr/local/${ssrpanel_v2ray_name}
+    chmod -R a+x /usr/local/${v2ray_core_name}
+}
+
+# Start v2ray service
+v2ray_start_service(){
+    cd /usr/local/${ssrpanel_v2ray_name}
+    if [ -f /usr/local/${ssrpanel_v2ray_name}/${ssrpanel_v2ray_name}.jar ]; then
+        if [ $? -eq 0 ]; then
+            chmod +x /etc/init.d/${v2ray_init_name}
+            if check_sys packageManager yum; then
+                chkconfig --add ${v2ray_init_name}
+                chkconfig ${v2ray_init_name} on
+            elif check_sys packageManager apt; then
+                cd /etc/init.d
+                update-rc.d -f ${v2ray_init_name} defaults 90
+            fi
+
+            /etc/init.d/${v2ray_init_name} start
+            if [ $? -eq 0 ]; then
+                echo -e "[${green}Info${plain}] v2ray start success!"
+                echo
+                echo -e "---------------------------------------------------"
+                echo -e "Congratulations, v2ray deploy completed!"
+                echo -e "---------------------------------------------------"        
+                echo -e "               Config  Info                        "
+                echo -e "Your Server IP        : $(get_ip)                  "
+                echo -e "Your V2ray Grpc Port  : ${v2ray_grpc_port}         "
+                echo -e "Your V2ray Vmess Port : ${v2ray_vmess_port}        "
+                echo -e "Your Encryption Method: ${v2ray_encryption}        "
+                echo -e "               Deploy  Info                        "
+                echo -e "Your MySQL IP         : ${v2ray_mysql_ip_address}  "
+                echo -e "Your MySQL Port       : ${v2ray_mysql_ip_port}     " 
+                echo -e "Your MySQL DBname     : ${v2ray_mysql_db_name}     "
+                echo -e "Your MySQL User       : ${v2ray_mysql_user_name}   "
+                echo -e "Your MySQL Password   : ${v2ray_mysql_db_password} "
+                echo -e "Your Alter ID         : ${v2ray_mysql_alter_id}    "
+                echo -e "Your Node ID          : ${v2ray_mysql_nodeid}      "
+                echo -e "Your Transfer_mul     : ${v2ray_mysql_ratio}       "
+                echo -e "---------------------------------------------------"         
+                echo -e "                Enjoy it!                          "
+                echo -e "---------------------------------------------------" 
+            else
+                echo -e "[${yellow}Warning${plain}] v2ray start failure!"
+            fi
+            
+        else
+            echo
+            echo -e "[${red}Error${plain}] Could not find jar file, failed to start service!"
+            exit 1
+        fi
+    else
+        echo
+        echo -e "[${red}Error${plain}] Could not find jar file, failed to start service!"
+        exit 1
+    fi
+}
+
+# v2ray firewall
+v2ray_firewall_set(){
+    echo -e "[${green}Info${plain}] firewall set start..."
+    if centosversion 6; then
+        /etc/init.d/iptables status > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            iptables -L -n | grep -i ${v2ray_grpc_port} > /dev/null 2>&1
+            iptables -L -n | grep -i ${v2ray_vmess_port} > /dev/null 2>&1
+            if [ $? -ne 0 ]; then
+                iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport ${v2ray_grpc_port} -j ACCEPT
+                iptables -I INPUT -m state --state NEW -m udp -p udp --dport ${v2ray_grpc_port} -j ACCEPT
+                iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport ${v2ray_vmess_port} -j ACCEPT
+                iptables -I INPUT -m state --state NEW -m udp -p udp --dport ${v2ray_vmess_port} -j ACCEPT
+                /etc/init.d/iptables save
+                /etc/init.d/iptables restart
+            else
+                echo -e "[${green}Info${plain}] port ${v2ray_grpc_port} ${v2ray_vmess_port} has been set up!"
+            fi
+        else
+            echo -e "[${yellow}Warning${plain}] iptables looks like shutdown or not installed, please manually set it if necessary!"
+        fi
+    elif centosversion 7; then
+        systemctl status firewalld > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            firewall-cmd --permanent --zone=public --add-port=${v2ray_grpc_port}/tcp
+            firewall-cmd --permanent --zone=public --add-port=${v2ray_grpc_port}/udp
+            firewall-cmd --permanent --zone=public --add-port=${v2ray_vmess_port}/tcp
+            firewall-cmd --permanent --zone=public --add-port=${v2ray_vmess_port}/udp
+            firewall-cmd --reload
+        else
+            echo -e "[${yellow}Warning${plain}] firewalld looks like not running or not installed, please enable port ${v2ray_grpc_port} ${v2ray_vmess_port} manually if necessary!"
+        fi
+    fi
+    echo -e "[${green}Info${plain}] firewall set completed..."
+}
+
+# Install v2ray
+install_v2ray(){
+    if [ -d "/usr/local/${ssrpanel_v2ray_name}" ]; then
+        printf "ssrpanel-v2ray has been installed, Do you want to uninstall it? (y/n)"
+        printf "\n"
+        read -p "(Default: y):" install_answer
+        [ -z ${install_answer} ] && install_answer="y"
+        if [ "${install_answer}" == "y" ] || [ "${install_answer}" == "Y" ]; then
+            cd ${cur_dir}
+            uninstall_v2ray
+        else
+            echo
+            echo "uninstall cancelled, nothing to do..."
+            echo
+        fi
+    else
+        modify_time
+        disable_selinux
+        v2ray_install_prepare
+        v2ray_download_files
+        v2ray_deploy
+        if check_sys packageManager yum; then
+            v2ray_firewall_set
+        fi
+        v2ray_start_service
+        v2ray_install_cleanup
+        exit 0
+    fi
+}
+
+# Clean v2ray install
+v2ray_install_cleanup(){
+    cd ${cur_dir}
+    rm -rf ${ssrpanel_v2ray_file}.zip
+    rm -rf ${v2ray_core_file}.zip
+}
+
+# Uninstall v2ray
+uninstall_v2ray(){
+    printf "Are you sure uninstall v2ray? (y/n)"
+    printf "\n"
+    read -p "(Default: n):" answer
+    [ -z ${answer} ] && answer="n"
+    if [ "${answer}" == "y" ] || [ "${answer}" == "Y" ]; then
+        if [ -d "/usr/local/${v2ray_init_name}" ]; then
+            /etc/init.d/${v2ray_init_name} status > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                /etc/init.d/${v2ray_init_name} stop
+            fi
+            if check_sys packageManager yum; then
+                chkconfig --del ${v2ray_init_name}
+            elif check_sys packageManager apt; then
+                update-rc.d -f ${v2ray_init_name} remove
+            fi
+            v2ray_install_cleanup
+
+            rm -f /etc/init.d/${v2ray_init_name}
+            rm -rf /usr/local/${ssrpanel_v2ray_name}
+            rm -rf /usr/local/${v2ray_core_name}
+
+            echo "v2ray uninstall success!"
+        else
+            echo
+            echo "Your v2ray is not installed!"
+            echo
+        fi
+    else
+        echo
+        echo "uninstall cancelled, nothing to do..."
+        echo
+    fi
+}
+########################################################  V2RAY END ########################################################
+
 # Initialization step
 commands=(
-Install\ ShadowsocksR
-Uninstall\ ShadowsocksR
-Auto\ Reboot\ ShadowsocksR
+Install\ shadowsocksr
+Uninstall\ shadowsocksr
+Install\ v2ray
+Uninstall\ v2ray
+Auto\ reboot\ system
 Modify\ time\ zone
 )
 
@@ -859,9 +1386,15 @@ choose_command(){
         uninstall_shadowsocksr
         ;;
         3)
-        auto_reboot_shadowsocksr
+        install_v2ray
         ;;
         4)
+        uninstall_v2ray
+        ;;
+        5)
+        auto_reboot_system
+        ;;
+        6)
         modify_time
         ;;
         *)
@@ -872,4 +1405,3 @@ choose_command(){
 # start
 cd ${cur_dir}
 choose_command
-
