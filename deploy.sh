@@ -13,7 +13,6 @@
 # PATH
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
-clear
 
 # libsodium
 libsodium_file="libsodium-1.0.16"
@@ -140,7 +139,7 @@ check_sys(){
     if [[ -f /etc/redhat-release ]]; then
         release="centos"
         systemPackage="yum"
-    elif grep -Eqi "debian" /etc/issue; then
+    elif grep -Eqi "debian|raspbian" /etc/issue; then
         release="debian"
         systemPackage="apt"
     elif grep -Eqi "ubuntu" /etc/issue; then
@@ -149,7 +148,7 @@ check_sys(){
     elif grep -Eqi "centos|red hat|redhat" /etc/issue; then
         release="centos"
         systemPackage="yum"
-    elif grep -Eqi "debian" /proc/version; then
+    elif grep -Eqi "debian|raspbian" /proc/version; then
         release="debian"
         systemPackage="apt"
     elif grep -Eqi "ubuntu" /proc/version; then
@@ -593,7 +592,7 @@ deploy_config(){
     if check_sys packageManager yum; then
         yum install -y python python-devel python-setuptools openssl openssl-devel curl unzip gcc automake autoconf make libtool wget git
     elif check_sys packageManager apt; then
-        apt-get -y update
+        apt-get -y update 
         apt-get -y install python python-dev python-setuptools openssl libssl-dev curl unzip gcc automake autoconf make libtool wget git
     fi
     cd ${cur_dir}
@@ -764,69 +763,57 @@ uninstall_shadowsocksr(){
 # Auto Reboot System
 auto_reboot_system(){
     cd ${cur_dir}
-    if [ -f /usr/local/${shadowsocksr_name}/server.py ]; then
-        if [ $? -eq 0 ]; then
-            # Modify time zone
-            modify_time
 
-            #hour
-            echo -e "Please enter the hour now(0-23):"
-            read -p "(Default hour: 5):" auto_hour
-            [ -z "${auto_hour}" ] && auto_hour="5"
-            expr ${auto_hour} + 1 &>/dev/null
+    # Modify time zone
+    modify_time
 
-            #minute
-            echo -e "Please enter the minute now(0-59):"
-            read -p "(Default hour: 30):" auto_minute
-            [ -z "${auto_minute}" ] && auto_minute="30"
-            expr ${auto_minute} + 1 &>/dev/null
+    #hour
+    echo -e "Please enter the hour now(0-23):"
+    read -p "(Default hour: 5):" auto_hour
+    [ -z "${auto_hour}" ] && auto_hour="5"
+    expr ${auto_hour} + 1 &>/dev/null
 
-            echo -e "[${green}Info${plain}] The time has been set, then install crontab!"
+    #minute
+    echo -e "Please enter the minute now(0-59):"
+    read -p "(Default hour: 30):" auto_minute
+    [ -z "${auto_minute}" ] && auto_minute="30"
+    expr ${auto_minute} + 1 &>/dev/null
 
-            # Install crontabs
-            if check_sys packageManager yum; then
-                yum install -y vixie-cron cronie
-            elif check_sys packageManager apt; then
-                apt-get -y update
-                apt-get -y install cron
-            fi
+    echo -e "[${green}Info${plain}] The time has been set, then install crontab!"
 
-            echo "$auto_minute $auto_hour * * * root /sbin/reboot" >> /etc/crontab
+    # Install crontabs
+    if check_sys packageManager yum; then
+        yum install -y vixie-cron cronie
+    elif check_sys packageManager apt; then
+        apt-get -y update 
+        apt-get -y install cron
+    fi
 
-            # start crontabs
-            if check_sys packageManager yum; then
-                chkconfig crond on
-                service crond restart
-            elif check_sys packageManager apt; then
-                /etc/init.d/cron restart
-            fi
-  
-            if [ $? -eq 0 ]; then
-                echo -e "[${green}Info${plain}] crontab start success!"
-            else
-                echo -e "[${yellow}Warning${plain}] crontab start failure!"
-            fi
+    echo "$auto_minute $auto_hour * * * root /sbin/reboot" >> /etc/crontab
 
-            echo -e "[${green}Info${plain}] Has been installed successfully!"
-            echo -e "-----------------------------------------------------"
-            echo -e "The time for automatic restart has been set! "
-            echo -e "-----------------------------------------------------"
-            echo -e "hour       : ${auto_hour}                   "
-            echo -e "minute     : ${auto_minute}                 "
-            echo -e "Restart the system at ${auto_hour}:${auto_minute} every day"
-            echo -e "-----------------------------------------------------"
+    # start crontabs
+    if check_sys packageManager yum; then
+        chkconfig crond on
+        service crond restart
+    elif check_sys packageManager apt; then
+        /etc/init.d/cron restart
+    fi
 
-        else
-            echo
-            echo -e "[${red}Error${plain}] Can't set automatic restart shadowsocksr service!"
-            exit 1
-        fi
-
+    if [ $? -eq 0 ]; then
+        echo -e "[${green}Info${plain}] crontab start success!"
     else
-        echo
-        echo -e "[${red}Error${plain}] Can't find ShadowsocksR"
+        echo -e "[${yellow}Warning${plain}] crontab start failed!"
         exit 1
     fi
+
+    echo -e "[${green}Info${plain}] Has been installed successfully!"
+    echo -e "-----------------------------------------------------"
+    echo -e "The time for automatic restart has been set! "
+    echo -e "-----------------------------------------------------"
+    echo -e "hour       : ${auto_hour}                   "
+    echo -e "minute     : ${auto_minute}                 "
+    echo -e "Restart the system at ${auto_hour}:${auto_minute} every day"
+    echo -e "-----------------------------------------------------"
 }
 
 
@@ -1004,7 +991,8 @@ v2ray_install_prepare(){
     if check_sys packageManager yum; then
         yum install -y python python-devel python-setuptools openssl openssl-devel wget unzip java-1.8.0-openjdk java-1.8.0-openjdk-devel
     elif check_sys packageManager apt; then
-        apt-get -y update
+        add-apt-repository ppa:openjdk-r/ppa -y 
+        apt-get -y update 
         apt-get -y install python python-dev python-setuptools openssl libssl-dev wget unzip openjdk-8-jdk
     fi
     cd ${cur_dir} 
@@ -1309,7 +1297,7 @@ uninstall_v2ray(){
     read -p "(Default: n):" answer
     [ -z ${answer} ] && answer="n"
     if [ "${answer}" == "y" ] || [ "${answer}" == "Y" ]; then
-        if [ -d "/usr/local/${v2ray_init_name}" ]; then
+        if [ -d "/usr/local/${ssrpanel_v2ray_name}" ]; then
             /etc/init.d/${v2ray_init_name} status > /dev/null 2>&1
             if [ $? -eq 0 ]; then
                 /etc/init.d/${v2ray_init_name} stop
@@ -1351,7 +1339,9 @@ Modify\ time\ zone
 
 
 # Choose command
-choose_command(){  
+choose_command(){
+    clear
+      
     while true
     do
     echo 

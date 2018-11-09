@@ -1,3 +1,6 @@
+### 环境
+可部署于 Centos6+，Centos7+，Debian9，Ubuntu14+
+
 ### 功能
 1. 安装shadowsocksr服务端
 2. 卸载shadowsocksr服务端
@@ -8,10 +11,10 @@
 
 ### 安装wget
 ```
-# centos
+# Centos
 yum -y install wget
 
-# Ubuntu
+# Ubuntu，Debian
 apt-get -y install wget
 ```
 
